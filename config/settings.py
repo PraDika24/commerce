@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     # 'allauth.socialaccount.providers.facebook',
     # 'allauth.socialaccount.providers.twitter',
     'users',
+    'drf_spectacular',
     
 ]
 
@@ -144,6 +145,7 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -170,3 +172,17 @@ REST_AUTH = {
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Commerce API Project',
+    'DESCRIPTION': 'Dokumentasi API untuk Sistem E-Commerence.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # Jika ingin mendukung login JWT di UI Swagger
+    'COMPONENT_SPLIT_PATCH': True,
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': True,
+    },
+}
