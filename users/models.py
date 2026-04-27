@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.conf import settings
 
 # Create your models here.
 class UserManager(BaseUserManager):
@@ -49,3 +50,26 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+    
+
+class SocialAccount(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_accounts")
+    provider = models.CharField(max_length=20, db_index=True)  # google / facebook
+    provider_uid = models.CharField(max_length=255, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+        models.UniqueConstraint(
+            fields=['provider', 'provider_uid'], 
+            name='unique_social_account'
+            ),
+        models.UniqueConstraint(
+                fields=['user', 'provider'],
+                name='unique_user_provider'
+            )
+    ]
+        
+
+    def __str__(self):
+        return f"{self.provider} - {self.user}"

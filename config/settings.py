@@ -186,3 +186,7 @@ SPECTACULAR_SETTINGS = {
         'displayOperationId': True,
     },
 }
+
+# Socilal Auth Key
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+FACEBOOK_APP_ID = os.getenv('FACEBOOK_APP_ID')
