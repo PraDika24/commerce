@@ -5,7 +5,28 @@ from .provider import PROVIDERS
 User = get_user_model()
 
 
-def social_authenticate(provider: str, token: str):
+def social_login(provider: str, token: str):
+    if provider not in PROVIDERS:
+        raise ValueError("Provider tidak didukung")
+
+    provider_impl = PROVIDERS[provider]
+    user_info = provider_impl.verify(token)
+
+    uid = user_info.get("uid")
+
+    # 🔥 LOGIN HARUS BERDASARKAN UID
+    social = SocialAccount.objects.filter(
+        provider=provider,
+        provider_uid=uid
+    ).select_related("user").first()
+
+    if not social:
+        raise ValueError("Akun belum terdaftar, silakan register atau link akun")
+
+    return social.user
+
+
+def social_register(provider: str, token: str):
     if provider not in PROVIDERS:
         raise ValueError("Provider tidak didukung")
 
@@ -15,43 +36,38 @@ def social_authenticate(provider: str, token: str):
     email = user_info.get("email")
     uid = user_info.get("uid")
 
-    # 🔥 VALIDASI DULU
     if not email:
         raise ValueError("Email tidak tersedia")
 
     if not user_info.get("email_verified"):
         raise ValueError("Email belum diverifikasi")
 
-    # 🔥 1. PRIORITAS: cek SocialAccount (identity utama)
-    social = SocialAccount.objects.filter(
+    # ❗ jangan duplicate provider
+    if SocialAccount.objects.filter(
         provider=provider,
         provider_uid=uid
-    ).first()
+    ).exists():
+        raise ValueError("Akun sudah terdaftar")
 
-    if social:
-        return social.user, False
+    # ❗ jangan duplicate email
+    if User.objects.filter(email=email).exists():
+        raise ValueError("Email sudah digunakan, silakan login lalu link akun")
 
-    # 🔥 2. fallback ke email (untuk linking otomatis)
-    user = User.objects.filter(email=email).first()
+    user = User.objects.create(
+        email=email,
+        first_name=user_info.get("first_name", ""),
+        last_name=user_info.get("last_name", ""),
+        role="buyer",
+    )
+    user.set_unusable_password()
+    user.save()
 
-    if not user:
-        user = User.objects.create(
-            email=email,
-            first_name=user_info.get("first_name", ""),
-            last_name=user_info.get("last_name", ""),
-            role="buyer",
-        )
-        user.set_unusable_password()
-        user.save()
-        created = True
-    else:
-        created = False
-
-    # 🔥 3. AUTO LINK (INI YANG SEBELUMNYA KAMU LEWATKAN)
-    SocialAccount.objects.get_or_create(
+    SocialAccount.objects.create(
         user=user,
         provider=provider,
         provider_uid=uid
     )
 
-    return user, created
+    return user
+
+

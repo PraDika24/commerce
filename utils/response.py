@@ -8,7 +8,7 @@ def success_response(data=None, message="Success", status=201):
     }, status=status)
 
 
-def error_response(errors=None, message="Error", status=400):
+def error_response(errors='erorr', message="Error", status=400):
     return Response({
         "success": False,
         "message": message,
