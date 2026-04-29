@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 load_dotenv()
 
@@ -56,6 +57,7 @@ INSTALLED_APPS = [
     # 'allauth.socialaccount.providers.twitter',
     'users',
     'drf_spectacular',
+    'rest_framework_simplejwt.token_blacklist'
     
 ]
 
@@ -190,3 +192,12 @@ SPECTACULAR_SETTINGS = {
 # Socilal Auth Key
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 FACEBOOK_APP_ID = os.getenv('FACEBOOK_APP_ID')
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15), 
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),      
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+
+
