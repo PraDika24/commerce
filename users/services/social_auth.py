@@ -5,28 +5,7 @@ from .provider import PROVIDERS
 User = get_user_model()
 
 
-def social_login(provider: str, token: str):
-    if provider not in PROVIDERS:
-        raise ValueError("Provider tidak didukung")
-
-    provider_impl = PROVIDERS[provider]
-    user_info = provider_impl.verify(token)
-
-    uid = user_info.get("uid")
-
-    # 🔥 LOGIN HARUS BERDASARKAN UID
-    social = SocialAccount.objects.filter(
-        provider=provider,
-        provider_uid=uid
-    ).select_related("user").first()
-
-    if not social:
-        raise ValueError("Akun belum terdaftar, silakan register atau link akun")
-
-    return social.user
-
-
-def social_register(provider: str, token: str):
+def social_authenticate(provider: str, token: str):
     if provider not in PROVIDERS:
         raise ValueError("Provider tidak didukung")
 
@@ -42,17 +21,24 @@ def social_register(provider: str, token: str):
     if not user_info.get("email_verified"):
         raise ValueError("Email belum diverifikasi")
 
-    # ❗ jangan duplicate provider
-    if SocialAccount.objects.filter(
+    # 🔥 1. cek SocialAccount → LOGIN
+    social = SocialAccount.objects.filter(
         provider=provider,
         provider_uid=uid
-    ).exists():
-        raise ValueError("Akun sudah terdaftar")
+    ).select_related("user").first()
 
-    # ❗ jangan duplicate email
-    if User.objects.filter(email=email).exists():
-        raise ValueError("Email sudah digunakan, silakan login lalu link akun")
+    if social:
+        return social.user, False
 
+    # 🔥 2. cek email → JANGAN create user baru
+    existing_user = User.objects.filter(email=email).first()
+
+    if existing_user:
+        raise ValueError(
+            "Email sudah terdaftar. Silakan login lalu hubungkan akun."
+        )
+
+    # 🔥 3. REGISTER (hanya sekali, email pertama yang disimpan)
     user = User.objects.create(
         email=email,
         first_name=user_info.get("first_name", ""),
@@ -68,6 +54,5 @@ def social_register(provider: str, token: str):
         provider_uid=uid
     )
 
-    return user
-
+    return user, True
 

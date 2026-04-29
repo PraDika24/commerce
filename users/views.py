@@ -4,7 +4,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 
 from .serializers import SocialLoginSerializer
-from .services.social_auth import ( social_login, social_register)
+from .services.social_auth import social_authenticate
 from utils.response import success_response, error_response
 from rest_framework.permissions import IsAuthenticated
 
@@ -24,15 +24,6 @@ class SocialLoginAPIView(APIView):
 
     @extend_schema(
         request=SocialLoginSerializer,
-        parameters=[
-            OpenApiParameter(
-                name="mode",
-                description="login atau register",
-                required=False,
-                type=str,
-                enum=["login", "register"]
-            )
-        ],
         responses=SocialLoginSerializer
     )
     def post(self, request):
@@ -51,14 +42,15 @@ class SocialLoginAPIView(APIView):
         mode = request.query_params.get("mode", "login")
 
         try:
-            if mode == "register":
-                user = social_register(provider, token)
-                message = f"Register dengan {provider} berhasil"
-            else:
-                user = social_login(provider, token)
-                message = f"Login dengan {provider} berhasil"
+            user, created = social_authenticate(provider, token)
 
             refresh = RefreshToken.for_user(user)
+
+            message = (
+                f"Register dengan {provider} berhasil"
+                if created else
+                f"Login dengan {provider} berhasil"
+            )
 
             return success_response(
                 data={
