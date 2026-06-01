@@ -1,4 +1,6 @@
 from django.db import models
+import uuid
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.conf import settings
 
@@ -42,6 +44,9 @@ class User(AbstractUser):
         null=True,
         blank=True
     )
+    email_verified = models.BooleanField(
+        default=False
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
@@ -73,3 +78,26 @@ class SocialAccount(models.Model):
 
     def __str__(self):
         return f"{self.provider} - {self.user}"
+    
+class EmailVerificationToken(models.Model):
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE
+    )
+
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False
+    )
+
+    expires_at = models.DateTimeField()
+
+    is_used = models.BooleanField(
+        default=False
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )

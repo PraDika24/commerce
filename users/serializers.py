@@ -13,45 +13,60 @@ class LinkSocialSerializer(serializers.Serializer):
     provider = serializers.ChoiceField(choices=["google", "facebook"])
     token = serializers.CharField()
 
+
+SPECIAL_CHARS = r'[!@#$%^&*()\-,.?\":{}|<>_~]'
+NAME_REGEX    = r'^[A-Za-z ]+$'
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
         fields = ["email", "password", "first_name", "last_name"]
+        extra_kwargs = {
+            "first_name": {"required": True, "max_length": 100},
+            "last_name":  {"required": True, "max_length": 100},
+        }
+
+    @staticmethod
+    def _validate_name(value: str, field_label: str) -> str:
+        """Strip whitespace, enforce alpha-only, block empty strings."""
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError(f"{field_label} tidak boleh kosong")
+        if not re.match(NAME_REGEX, value):
+            raise serializers.ValidationError(
+                f"{field_label} hanya boleh berisi huruf dan spasi"
+            )
+        return value
     
+
     def validate_email(self, value):
+        value = value.strip().lower()
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("Email sudah digunakan")
         return value
 
-    def validate_first_name(self, value):
-        if not re.match(r'^[A-Za-z ]+$', value):
-            raise serializers.ValidationError(
-                "First name hanya boleh huruf dan spasi"
-            )
-        return value
+    def validate_first_name(self, value: str) -> str:
+        return self._validate_name(value, "First name")
 
-    def validate_last_name(self, value):
-        if not re.match(r'^[A-Za-z ]+$', value):
-            raise serializers.ValidationError(
-                "Last name hanya boleh huruf dan spasi"
-            )
-        return value
+    def validate_last_name(self, value: str) -> str:
+        return self._validate_name(value, "Last name")
+
 
     # 🔹 Validasi password
     def validate_password(self, value):
         errors = []
         if len(value) < 8:
             errors.append("Password minimal 8 karakter") 
-
+        if not re.search(r'[a-z]', value):        # ← tambahan: huruf kecil
+            errors.append("Harus ada huruf kecil")
         if not re.search(r'[A-Z]', value):
            errors.append("Harus ada huruf besar")
 
         if not re.search(r'[0-9]', value):
             errors.append("Harus ada angka")
 
-        if not re.search(r'[!@#$%^&*(),.?\":{}|<>_]', value):
+        if not re.search(SPECIAL_CHARS, value):
             errors.append("Harus ada karakter spesial")
 
         if errors:
@@ -66,6 +81,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Password wajib diisi")
        return  User.objects.create_user(
            **validated_data,
+            is_active=False,
             role="buyer"
         )
 
