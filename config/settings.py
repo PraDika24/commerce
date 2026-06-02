@@ -218,3 +218,16 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # App Password 16 karakt
 DEFAULT_FROM_EMAIL  = os.getenv("EMAIL_HOST_USER")
 
 FRONTEND_URL = "http://localhost:8000/api"  # ← arahkan ke Django
+
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://localhost:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+
+PASSWORD_RESET_TIMEOUT = 3600

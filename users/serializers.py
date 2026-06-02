@@ -141,4 +141,96 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         if 'email' in attrs:
             raise serializers.ValidationError("Email tidak boleh di ubah")
         return attrs
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+class ResetPasswordSerializer(serializers.Serializer):
+    token    = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+
+    def validate_password(self, value):
+        errors = []
+        if len(value) < 8:
+            errors.append("Password minimal 8 karakter")
+        if not re.search(r'[A-Z]', value):
+            errors.append("Harus ada huruf besar")
+        if not re.search(r'[a-z]', value):
+            errors.append("Harus ada huruf kecil")
+        if not re.search(r'[0-9]', value):
+            errors.append("Harus ada angka")
+        if not re.search(SPECIAL_CHARS, value):
+            errors.append("Harus ada karakter spesial")
+        if errors:
+            raise serializers.ValidationError(errors)
+        return value
+
+# serializers.py
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        errors = []
+        if len(value) < 8:
+            errors.append("Password minimal 8 karakter")
+        if not re.search(r'[A-Z]', value):
+            errors.append("Harus ada huruf besar")
+        if not re.search(r'[a-z]', value):
+            errors.append("Harus ada huruf kecil")
+        if not re.search(r'[0-9]', value):
+            errors.append("Harus ada angka")
+        if not re.search(SPECIAL_CHARS, value):
+            errors.append("Harus ada karakter spesial")
+        if errors:
+            raise serializers.ValidationError(errors)
+        return value
+
+    def validate(self, attrs):
+        if attrs["old_password"] == attrs["new_password"]:
+            raise serializers.ValidationError(
+                {"new_password": "Password baru tidak boleh sama dengan password lama"}
+            )
+        return attrs
     
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        user  = User.objects.filter(email=value).first()
+
+        if not user:
+            raise serializers.ValidationError("Email tidak terdaftar")
+
+        if user.is_active and user.email_verified:
+            raise serializers.ValidationError("Email sudah diverifikasi")
+
+        return value
+
+# serializers.py
+class DeleteAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, required=False)
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+
+        # Kalau punya password — wajib kirim password
+        if user.has_usable_password():
+            password = attrs.get("password")
+
+            if not password:
+                raise serializers.ValidationError(
+                    {"password": "Password diperlukan untuk menghapus akun"}
+                )
+
+            if not user.check_password(password):
+                raise serializers.ValidationError(
+                    {"password": "Password tidak sesuai"}
+                )
+
+        return attrs
