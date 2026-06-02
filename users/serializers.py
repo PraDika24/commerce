@@ -2,6 +2,7 @@ from rest_framework import serializers
 import re
 from django.contrib.auth import get_user_model
 from .models import User
+from .tasks import send_verification_email
 
 User = get_user_model()
 
@@ -79,12 +80,13 @@ class RegisterSerializer(serializers.ModelSerializer):
        password = validated_data.get("password")
        if not password:
             raise serializers.ValidationError("Password wajib diisi")
-       return  User.objects.create_user(
+       user =  User.objects.create_user(
            **validated_data,
             is_active=False,
             role="buyer"
         )
-
+       send_verification_email.delay(user.email)
+       return user
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField()
