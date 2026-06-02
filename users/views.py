@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError as JWTTokenError
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
 
 from drf_spectacular.utils import extend_schema
 
@@ -16,12 +17,20 @@ from .serializers import (
     LoginSerializer,
     LogOutSerializer,
     UpdateProfileSerializer,
+    ResetPasswordSerializer,
+    ForgotPasswordSerializer,
+    ChangePasswordSerializer,
+    ResendVerificationSerializer,
+    DeleteAccountSerializer,
 )
 from .services.social_auth import social_authenticate
 from .services.provider import PROVIDERS
 from .models import SocialAccount
-from .tokens import confirm_verification_token
+from .tokens import confirm_verification_token, verify_password_reset_token, delete_password_reset_token
 from utils.response import success_response, error_response
+from .tasks import send_password_reset_email,send_verification_email
+from drf_spectacular.utils import inline_serializer
+from rest_framework import serializers
 
 User = get_user_model()
 
@@ -274,3 +283,188 @@ class VerifyEmailView(APIView):
         user.email_verified = True
         user.save(update_fields=["is_active", "email_verified"])
         return success_response(message="Email berhasil diverifikasi", data={"email": user.email}, status=status.HTTP_200_OK)
+
+
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ForgotPasswordSerializer,
+        responses=None
+    )
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                message="Validation Error",
+                errors=serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = serializer.validated_data["email"]
+        user  = User.objects.filter(email=email).first()
+
+        # Selalu return success meski email tidak ada — cegah user enumeration
+        if user:
+            send_password_reset_email.delay(user.email, user.id)
+
+        return success_response(
+            message="Jika email terdaftar, link reset password akan dikirim.",
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        token = request.query_params.get("token")
+        if not token:
+            return error_response(
+                message="Token tidak ditemukan",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_id = verify_password_reset_token(token)
+        if not user_id:
+            return error_response(
+                message="Token tidak valid atau sudah expired",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return success_response(
+            message="Token valid, silakan masukkan password baru.",
+            data={"token": token},
+            status=status.HTTP_200_OK,
+        )
+    
+    @extend_schema(request=ResetPasswordSerializer)
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                message="Validation Error",
+                errors=serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        token    = serializer.validated_data["token"]
+        password = serializer.validated_data["password"]
+
+        user_id = verify_password_reset_token(token)
+        if not user_id:
+            return error_response(
+                message="Token tidak valid atau sudah expired",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return error_response(
+                message="User tidak ditemukan",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        user.set_password(password)
+        user.save(update_fields=["password"])
+
+        outstanding_tokens = OutstandingToken.objects.filter(user=user)
+        for token in outstanding_tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
+
+        # Hapus token agar tidak bisa dipakai lagi
+        delete_password_reset_token(token)
+
+        return success_response(
+            message="Password berhasil direset, silakan login.",
+            status=status.HTTP_200_OK,
+        )
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=ChangePasswordSerializer)
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                message="Validation Error",
+                errors=serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        old_password = serializer.validated_data["old_password"]
+        new_password = serializer.validated_data["new_password"]
+
+        # Cek old password benar
+        if not request.user.check_password(old_password):
+            return error_response(
+                message="Password lama tidak sesuai",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update password
+        request.user.set_password(new_password)
+        request.user.save(update_fields=["password"])
+
+        # Blacklist semua refresh token lama
+        outstanding_tokens = OutstandingToken.objects.filter(user=request.user)
+        for token in outstanding_tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
+
+        return success_response(
+            message="Password berhasil diubah, silakan login kembali.",
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResendVerificationView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(request=ResendVerificationSerializer)
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                message="Validation Error",
+                errors=serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = serializer.validated_data["email"]
+        user  = User.objects.filter(email=email).first()
+
+        send_verification_email.delay(user.email)
+
+        return success_response(
+            message="Email verifikasi telah dikirim ulang, silakan cek inbox kamu.",
+            status=status.HTTP_200_OK,
+        )
+
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+    @extend_schema(request=DeleteAccountSerializer)
+    def post(self, request):
+        serializer = DeleteAccountSerializer(
+            data=request.data,
+            context={"request": request}  # ← wajib ada
+        )
+        if not serializer.is_valid():
+            return error_response(
+                message="Validation Error",
+                errors=serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Blacklist semua refresh token
+        outstanding_tokens = OutstandingToken.objects.filter(user=request.user)
+        for token in outstanding_tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
+
+        request.user.delete()
+
+        return success_response(
+            message="Akun berhasil dihapus.",
+            status=status.HTTP_200_OK,
+        )
