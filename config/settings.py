@@ -56,6 +56,8 @@ INSTALLED_APPS = [
     # 'allauth.socialaccount.providers.facebook',
     # 'allauth.socialaccount.providers.twitter',
     'users',
+    'sellers',
+    'admin_panel',
     'drf_spectacular',
     'rest_framework_simplejwt.token_blacklist'
     
