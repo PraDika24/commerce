@@ -151,8 +151,8 @@ python manage.py runserver
 # Terminal 2 — Celery Worker
 celery -A config worker --loglevel=info --pool=solo
 
-# Terminal 3 — Redis (via Docker)
-docker run -d -p 6379:6379 redis:alpine
+# Terminal 3 — PostgreSQl & Redis (via Docker)
+docker compose up -d
 ```
 
 ### 7. API Documentation
