@@ -100,7 +100,7 @@ commerce/
 
 ### 1. Clone & Virtual Environment
 ```bash
-git clone https://github.com/username/commerce.git
+git clone https://github.com/PraDika24/commerce.git
 cd commerce
 python -m venv venv
 venv\Scripts\activate        # Windows
