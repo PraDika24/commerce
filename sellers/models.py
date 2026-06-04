@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-
+from django.utils.text import slugify
 
 class SellerApplication(models.Model):
 
@@ -41,3 +41,38 @@ class SellerApplication(models.Model):
     @property
     def is_rejected(self):
         return self.status == "rejected"
+
+class Store(models.Model):
+
+    seller      = models.OneToOneField(
+                    settings.AUTH_USER_MODEL,
+                    on_delete=models.CASCADE,
+                    related_name="store",
+                    limit_choices_to={"role": "seller"}
+                  )
+    name        = models.CharField(max_length=100, unique=True)
+    slug        = models.SlugField(max_length=120, unique=True, blank=True)
+    description = models.TextField(blank=True, null=True)
+    logo        = models.ImageField(
+                    upload_to="stores/logos/",
+                    blank=True,
+                    null=True
+                  )
+    address     = models.TextField(blank=True, null=True)
+    is_active   = models.BooleanField(default=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = "Store"
+        verbose_name_plural = "Stores"
+        ordering            = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        # Auto generate slug dari nama toko
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)

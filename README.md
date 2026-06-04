@@ -76,7 +76,7 @@ commerce/
 ## 🔲 Fitur yang Akan Datang
 
 ### 🏪 Toko (Seller)
-- [ ] Buat & kelola toko
+- [x] Buat & kelola toko
 - [ ] Upload produk
 - [ ] Manajemen stok
 
